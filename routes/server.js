@@ -4,7 +4,7 @@ const inquirer = require('inquirer')
 require('dotenv').config()
 
 
-async function queryDB(query) {
+async function queryDB() {
   const db = await mysql.createConnection({
     host: 'localhost',
     user: process.env.DB_USER,
@@ -12,8 +12,14 @@ async function queryDB(query) {
     database: process.env.DB_NAME
   })
 
-  const [rows] = await db.query(query)
-  return rows
+  switch (arguments.length) {
+    case 1:
+      var [rows] = await db.query(arguments[0])
+      return rows
+    case 2:
+      var [rows] = await db.query(arguments[0], arguments[1])
+      return rows
+  }
 }
 
 async function userPrompt() {
@@ -21,7 +27,8 @@ async function userPrompt() {
     {
       type: 'list',
       message: 'Select an option',
-      choices: ['View all departments', 'View all roles', 'View all employees', new inquirer.Separator(), 'Add department', 'Add role', 'Add employee', new inquirer.Separator(), 'Update employee role', new inquirer.Separator()],
+      choices: ['View all departments', 'View all roles', 'View all employees', new inquirer.Separator(), 'Add department', 'Add role', 'Add employee',
+        new inquirer.Separator(), 'Update employee role', new inquirer.Separator()],
       name: 'options'
     })
 
@@ -36,13 +43,13 @@ async function userPrompt() {
       await displayEmployees()
       break
     case 'Add department':
-      addDepartment()
+      await addDepartment()
       break
     case 'Add role':
       await addRole()
       break
     case 'Add employee':
-      addEmployee()
+      await addEmployee()
       break
     default:
       break
@@ -72,12 +79,37 @@ async function getDepartments() {
   return temp
 }
 
+async function addDepartment() {
+  const answer = await inquirer.prompt([
+    {
+      type: 'input',
+      message: 'Name of department:',
+      name: 'name'
+    }
+  ])
+
+  await queryDB(`INSERT INTO department (name) VALUES (?)`, [answer.name])
+  console.log('Department added')
+}
+
 /* ---------- Roles table functions ---------- */
 async function displayRoles() {
   const res = await queryDB(`SELECT r.id, r.title, d.name as department, r.salary
                             FROM roles r
                             LEFT JOIN department d ON r.department_id = d.id`)
   console.log(cTable.getTable(res))
+}
+
+async function getRoles() {
+  let temp = []
+
+  const res = await queryDB(`SELECT title FROM roles`)
+
+  res.forEach(item => {
+    temp.push(item.title)
+  })
+
+  return temp
 }
 
 async function addRole() {
@@ -100,36 +132,62 @@ async function addRole() {
     }
   ])
 
+  const [row] = await queryDB(`SELECT id FROM department WHERE name = ?`, [answers.department])
+  await queryDB(`INSERT INTO roles (title, salary, department_id) VALUES (?, ?, ?)`, [answers.name, answers.salary, row.id])
 
-  // .then(answers => {
-  //   db.query(`INSERT INTO department (name) VALUES (?)`, answers.name,
-  //     function (err, results) {
-  //       console.log('Department added')
-  //     })
-  // })
+  console.log('Added role')
 }
 
 /* ---------- Employee table functions ---------- */
 async function displayEmployees() {
-  const res = await queryDB(`SELECT e.id, e.first_name, e.last_name, r.title, d.name as department, r.salary, e.manager_id as manager
+  const res = await queryDB(`SELECT e.id, e.first_name, e.last_name, r.title, d.name as department, r.salary, concat(m.first_name, ' ', m.last_name) as manager
                             FROM employee e
                             LEFT JOIN roles r ON e.role_id = r.id
-                            LEFT JOIN department d ON r.department_id = d.id`)
+                            LEFT JOIN department d ON r.department_id = d.id
+                            LEFT JOIN employee m ON e.manager_id = e.id`)
   console.log(cTable.getTable(res))
 }
 
-// const addDepartment = () => {
-//   inquirer.prompt([
-//     {
-//       type: 'input',
-//       message: 'Name of department:',
-//       name: 'name'
-//     }
-//   ])
-//     .then(answers => {
-//       db.query(`INSERT INTO department (name) VALUES (?)`, answers.name,
-//         function (err, results) {
-//           console.log('Department added')
-//         })
-//     })
-// }
+async function getManagers() {
+  const [row] = await queryDB(`SELECT id FROM employee WHERE manager_id IS NOT NULL`)
+  const res = await queryDB(`SELECT first_name, last_name FROM employee WHERE id = ?`, [row.id])
+
+  let temp = []
+
+  res.forEach(item => {
+    temp.push(item.first_name + ' ' + item.last_name)
+  })
+
+  return temp
+}
+
+async function addEmployee() {
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      message: 'First name of employee:',
+      name: 'firstName'
+    },
+    {
+      type: 'input',
+      message: 'Last name of employee:',
+      name: 'lastName'
+    },
+    {
+      type: 'list',
+      message: 'Select role of new employee',
+      choices: await getRoles(),
+      name: 'role'
+    },
+    {
+      type: 'list',
+      message: 'Select manager of employee if applicable',
+      choices: await getManagers(),
+      name: 'manager'
+    }
+  ])
+
+  const [roleID] = await queryDB(`SELECT id FROM roles WHERE title = ?`, [answers.role])
+  const [managerID] = await queryDB(`SELECT id FROM employee WHERE first_name = ?`, [answers.manager.split(' ')[0]])
+  await queryDB(`INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)`, [answers.firstName, answers.lastName, roleID.id, managerID.id])
+}
