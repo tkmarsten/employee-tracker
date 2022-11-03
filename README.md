@@ -1,4 +1,4 @@
-# employee-tracker
+# Employee Tracker
 
 ## Description
 
@@ -14,7 +14,7 @@ Use the command `npm i` to install the required packages.
 
 Use the command `node routes/server.js` or `node server.js` when in the routes folder to run the program. After running the commands, the user will be prompted with questions in the terminal.
 
-A demo of the program in use can be found [here]().
+A demo of the program in use can be found [here](https://youtu.be/aGXjyQQREbM).
 
 ## Contribution
 
