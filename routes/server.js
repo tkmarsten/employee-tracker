@@ -51,6 +51,9 @@ async function userPrompt() {
     case 'Add employee':
       await addEmployee()
       break
+    case 'Update employee role':
+      await updateEmployee()
+      break
     default:
       break
   }
@@ -89,7 +92,7 @@ async function addDepartment() {
   ])
 
   await queryDB(`INSERT INTO department (name) VALUES (?)`, [answer.name])
-  console.log('Department added')
+  console.log('Added new department')
 }
 
 /* ---------- Roles table functions ---------- */
@@ -135,7 +138,7 @@ async function addRole() {
   const [row] = await queryDB(`SELECT id FROM department WHERE name = ?`, [answers.department])
   await queryDB(`INSERT INTO roles (title, salary, department_id) VALUES (?, ?, ?)`, [answers.name, answers.salary, row.id])
 
-  console.log('Added role')
+  console.log('Added new role')
 }
 
 /* ---------- Employee table functions ---------- */
@@ -151,6 +154,18 @@ async function displayEmployees() {
 async function getManagers() {
   const [row] = await queryDB(`SELECT id FROM employee WHERE manager_id IS NOT NULL`)
   const res = await queryDB(`SELECT first_name, last_name FROM employee WHERE id = ?`, [row.id])
+
+  let temp = []
+
+  res.forEach(item => {
+    temp.push(item.first_name + ' ' + item.last_name)
+  })
+
+  return temp
+}
+
+async function getEmployees() {
+  const res = await queryDB(`SELECT first_name, last_name FROM employee`)
 
   let temp = []
 
@@ -190,4 +205,26 @@ async function addEmployee() {
   const [roleID] = await queryDB(`SELECT id FROM roles WHERE title = ?`, [answers.role])
   const [managerID] = await queryDB(`SELECT id FROM employee WHERE first_name = ?`, [answers.manager.split(' ')[0]])
   await queryDB(`INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)`, [answers.firstName, answers.lastName, roleID.id, managerID.id])
+  console.log('Added new employee')
+}
+
+async function updateEmployee() {
+  const answers = await inquirer.prompt([
+    {
+      type: 'list',
+      message: 'Select the employee to update',
+      choices: await getEmployees(),
+      name: 'employee'
+    },
+    {
+      type: 'list',
+      message: 'Select the new role of the employee',
+      choices: await getRoles(),
+      name: 'role'
+    }
+  ])
+
+  const [row] = await queryDB(`SELECT id FROM roles WHERE title = ?`, [answers.role])
+  await queryDB(`UPDATE employee SET role_id = ? WHERE concat(employee.first_name, ' ', employee.last_name) LIKE ?`, [row.id, answers.employee])
+  console.log('Updated employee')
 }
